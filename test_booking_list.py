@@ -17,5 +17,5 @@ def test_get_all_bookings_returns_list_of_ids():
     
     # Loops through every item with informative error messages
     for item in response_body:
-        assert "id" in item, f"Missing bookingid in {item}"
+        assert "bookingid" in item, f"Missing bookingid in {item}"
         assert isinstance(item["bookingid"], int), f"Not an int: {item}"
