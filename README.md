@@ -15,3 +15,5 @@ pip install -r requirements.txt
 ```bash
 pytest -v
 ```
+
+![API tests](https://github.com/ardboukk/backend-qa-framework/actions/workflows/tests.yml/badge.svg)
