@@ -1,6 +1,6 @@
 import pytest
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def booking():
     print("\n  SETUP")
     yield {"firstname": "Abed", "totalprice": 150, "depositpaid": True}
