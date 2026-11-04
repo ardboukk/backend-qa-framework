@@ -37,7 +37,7 @@ jobs:
           exit 1
 
       - name: Run the tests
-        run: pytest -v test_classify.py test_fixtures.py test_booking_crud.py test_my_api.py test_login_negative.py test_payment_faults.py test_rate_limit.py
+        run: pytest -v
 
       - name: Stop test servers
         if: always()
