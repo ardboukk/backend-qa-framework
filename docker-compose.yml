@@ -1,0 +1,12 @@
+services:
+  ratelimit-api:
+    build: ./ratelimit-api
+    command: ["node", "server.js"]
+    ports:
+      - "3000:3000"
+
+  mock-payment:
+    build: ./ratelimit-api
+    command: ["node", "mock-payment.js"]
+    ports:
+      - "4000:4000"

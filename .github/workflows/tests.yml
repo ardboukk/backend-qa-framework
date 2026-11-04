@@ -20,5 +20,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Start test servers in containers
+        run: docker compose up -d --build
+
+      - name: Wait until both servers are ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:3000/hello > /dev/null && curl -s http://localhost:4000/pay > /dev/null; then
+              echo "Both servers are ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Servers did not start within 30 seconds"
+          docker compose logs
+          exit 1
+
       - name: Run the tests
-        run: pytest -v test_classify.py test_fixtures.py test_booking_crud.py test_my_api.py test_login_negative.py
+        run: pytest -v test_classify.py test_fixtures.py test_booking_crud.py test_my_api.py test_login_negative.py test_payment_faults.py test_rate_limit.py
+
+      - name: Stop test servers
+        if: always()
+        run: docker compose down
