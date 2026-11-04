@@ -1,0 +1,24 @@
+name: API tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the tests
+        run: pytest -v test_classify.py test_fixtures.py test_booking_crud.py test_my_api.py test_login_negative.py
