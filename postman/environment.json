@@ -1,0 +1,28 @@
+{
+	"id": "d3496f8f-ecae-45db-814e-c3bb25256fb7",
+	"name": "Restful Booker",
+	"values": [
+		{
+			"key": "baseUrl",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "bookingId",
+			"value": "",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"color": null,
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2026-11-05T08:34:51.722Z",
+	"_postman_exported_using": "Postman/12.30.5"
+}

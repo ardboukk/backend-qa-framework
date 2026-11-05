@@ -42,3 +42,24 @@ jobs:
       - name: Stop test servers
         if: always()
         run: docker compose down
+
+  postman:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Run the Postman collection
+        run: newman run postman/collection.json -e postman/environment.json -r cli,htmlextra --reporter-htmlextra-export newman-report.html
+
+      - name: Save the HTML report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: newman-report
+          path: newman-report.html
