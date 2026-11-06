@@ -10,3 +10,13 @@ services:
     command: ["node", "mock-payment.js"]
     ports:
       - "4000:4000"
+
+  perf-api:
+    build: ./perf-api
+    ports:
+      - "5050:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
