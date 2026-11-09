@@ -65,6 +65,31 @@ app.get("/db", async (req, res) => {
   }, 50);
 });
 
+// Report cache: was an unbounded leak (found by perf/soak.js), now capped at 1000 entries
+const reportCache = new Map();
+let reportCounter = 0;
+app.get("/report", (req, res) => {
+  reportCounter++;
+  const report = crypto.randomBytes(2500).toString("hex"); // about 5 KB per report
+  reportCache.set(reportCounter, report);
+  // FIX: bounded cache - keep at most 1000 reports, evict the oldest
+  if (reportCache.size > 1000) {
+    const oldestKey = reportCache.keys().next().value;
+    reportCache.delete(oldestKey);
+  }
+  res.json({ id: reportCounter, size: report.length });
+});
+
+// Metrics: lets tests watch the server's memory from the outside
+app.get("/metrics", (req, res) => {
+  const m = process.memoryUsage();
+  res.json({
+    rss_mb: Number((m.rss / 1048576).toFixed(1)),
+    heap_used_mb: Number((m.heapUsed / 1048576).toFixed(1)),
+    cache_entries: reportCache.size,
+  });
+});
+
 app.listen(5000, () => {
   console.log("perf-api on 5000");
 });
