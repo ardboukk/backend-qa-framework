@@ -26,6 +26,7 @@ app.get("/io", (req, res) => {
 
 // Pool-bound: a fake database with only 5 connections, each query takes 50 ms
 const POOL_SIZE = 5;
+const MAX_QUEUE = 50; // load shedding: max requests allowed to wait
 let inUse = 0;
 const waiting = [];
 
@@ -50,6 +51,11 @@ function releaseConnection() {
 }
 
 app.get("/db", async (req, res) => {
+  // Load shedding: if the pool is busy and the queue is full, refuse fast
+  if (inUse >= POOL_SIZE && waiting.length >= MAX_QUEUE) {
+    res.set("Retry-After", "1");
+    return res.status(503).json({ error: "busy, try again shortly" });
+  }
   const queuedAt = Date.now();
   await getConnection();
   const poolWait = Date.now() - queuedAt;
