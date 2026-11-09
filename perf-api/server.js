@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const app = express();
+app.use(express.json());
 
 // Baseline: no work at all
 app.get("/fast", (req, res) => {
@@ -88,6 +89,28 @@ app.get("/metrics", (req, res) => {
     heap_used_mb: Number((m.heapUsed / 1048576).toFixed(1)),
     cache_entries: reportCache.size,
   });
+});
+
+// Level 3: simple login + protected endpoint
+const USERS = {};
+for (let i = 1; i <= 50; i++) USERS[`user${i}`] = `pass${i}`;
+const sessions = new Map(); // token -> username
+
+app.post("/login", (req, res) => {
+  const { username, password } = req.body || {};
+  if (!USERS[username] || USERS[username] !== password) {
+    return res.status(401).json({ error: "invalid credentials" });
+  }
+  const token = crypto.randomBytes(16).toString("hex");
+  sessions.set(token, username);
+  res.json({ token });
+});
+
+app.get("/orders", (req, res) => {
+  const auth = req.get("Authorization") || "";
+  const user = sessions.get(auth.replace("Bearer ", ""));
+  if (!user) return res.status(401).json({ error: "not logged in" });
+  setTimeout(() => res.json({ user, orders: [{ id: 1, total: 42 }] }), 30);
 });
 
 app.listen(5000, () => {
