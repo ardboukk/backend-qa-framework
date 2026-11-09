@@ -7,3 +7,4 @@ newman/
 .DS_Store
 perf/*.html
 perf/*.html
+perf/*.log
