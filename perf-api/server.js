@@ -63,7 +63,7 @@ app.get("/db", async (req, res) => {
   setTimeout(() => {
     releaseConnection();
     res.json({ pool_wait_ms: poolWait, still_queued: waiting.length });
-  }, 120); // REGRESSION ON PURPOSE: slower query
+  }, 50);
 });
 
 // Report cache: was an unbounded leak (found by perf/soak.js), now capped at 1000 entries
