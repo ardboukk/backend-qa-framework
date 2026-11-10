@@ -1,0 +1,50 @@
+name: Nightly performance
+
+on:
+  schedule:
+    - cron: "17 2 * * *"   # every day at 02:17 UTC
+  workflow_dispatch:        # also allow manual runs from GitHub
+
+jobs:
+  load-and-spike:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Start perf-api
+        run: docker compose up -d --build perf-api
+
+      - name: Wait until perf-api answers
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5050/fast && exit 0
+            sleep 1
+          done
+          echo "perf-api did not start in 30 s"
+          docker compose logs perf-api
+          exit 1
+
+      - name: Load test (70 req/s, SLO thresholds)
+        run: |
+          docker run --rm --network host -v "$PWD/perf:/perf" \
+            -e K6_WEB_DASHBOARD=true -e K6_WEB_DASHBOARD_EXPORT=/perf/load-report.html \
+            grafana/k6:2.3.0 run /perf/load-db.js
+
+      - name: Spike test (40 -> 200 -> 40 req/s)
+        if: always()
+        run: |
+          docker run --rm --network host -v "$PWD/perf:/perf" \
+            -e K6_WEB_DASHBOARD=true -e K6_WEB_DASHBOARD_EXPORT=/perf/spike-report.html \
+            grafana/k6:2.3.0 run /perf/spike-db.js
+
+      - name: Save the reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-perf-reports
+          path: perf/*-report.html
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
