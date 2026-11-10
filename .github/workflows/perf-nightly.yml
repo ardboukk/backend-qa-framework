@@ -27,14 +27,14 @@ jobs:
 
       - name: Load test (70 req/s, SLO thresholds)
         run: |
-          docker run --rm --network host -v "$PWD/perf:/perf" \
+          docker run --rm --user "$(id -u):$(id -g)" --network host -v "$PWD/perf:/perf" \
             -e K6_WEB_DASHBOARD=true -e K6_WEB_DASHBOARD_EXPORT=/perf/load-report.html \
             grafana/k6:2.3.0 run /perf/load-db.js
 
       - name: Spike test (40 -> 200 -> 40 req/s)
         if: always()
         run: |
-          docker run --rm --network host -v "$PWD/perf:/perf" \
+          docker run --rm --user "$(id -u):$(id -g)" --network host -v "$PWD/perf:/perf" \
             -e K6_WEB_DASHBOARD=true -e K6_WEB_DASHBOARD_EXPORT=/perf/spike-report.html \
             grafana/k6:2.3.0 run /perf/spike-db.js
 
@@ -44,6 +44,7 @@ jobs:
         with:
           name: nightly-perf-reports
           path: perf/*-report.html
+          if-no-files-found: error
 
       - name: Stop services
         if: always()

@@ -85,7 +85,7 @@ jobs:
 
       - name: Run smoke performance test (k6 2.3.0)
         run: |
-          docker run --rm --network host \
+          docker run --rm --user "$(id -u):$(id -g)" --network host \
             -v "$PWD/perf:/perf" \
             -e BASE_URL=http://localhost:5050 \
             -e K6_WEB_DASHBOARD=true \
@@ -98,6 +98,7 @@ jobs:
         with:
           name: perf-smoke-report
           path: perf/smoke-report.html
+          if-no-files-found: error
 
       - name: Stop services
         if: always()
