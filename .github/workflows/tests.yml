@@ -23,11 +23,11 @@ jobs:
       - name: Start test servers in containers
         run: docker compose up -d --build
 
-      - name: Wait until both servers are ready
+      - name: Wait until all servers are ready
         run: |
           for i in $(seq 1 30); do
-            if curl -s http://localhost:3000/hello > /dev/null && curl -s http://localhost:4000/pay > /dev/null; then
-              echo "Both servers are ready"
+            if curl -s http://localhost:3000/hello > /dev/null && curl -s http://localhost:4000/pay > /dev/null && curl -sf http://localhost:8081/health > /dev/null; then
+              echo "All servers are ready"
               exit 0
             fi
             sleep 1

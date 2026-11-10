@@ -20,3 +20,29 @@ services:
         limits:
           cpus: "1.0"
           memory: 256M
+
+  bank-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: qa
+      POSTGRES_PASSWORD: qa_local_only
+      POSTGRES_DB: bank
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./bank-api/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa -d bank"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  bank-api:
+    build: ./bank-api
+    ports:
+      - "8081:8080"
+    environment:
+      DATABASE_URL: postgresql://qa:qa_local_only@bank-db:5432/bank
+    depends_on:
+      bank-db:
+        condition: service_healthy
