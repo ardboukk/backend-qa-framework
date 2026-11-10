@@ -63,3 +63,42 @@ jobs:
         with:
           name: newman-report
           path: newman-report.html
+
+  perf-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Start perf-api
+        run: docker compose up -d --build perf-api
+
+      - name: Wait until perf-api answers
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5050/fast && exit 0
+            sleep 1
+          done
+          echo "perf-api did not start in 30 s"
+          docker compose logs perf-api
+          exit 1
+
+      - name: Run smoke performance test (k6 2.3.0)
+        run: |
+          docker run --rm --network host \
+            -v "$PWD/perf:/perf" \
+            -e BASE_URL=http://localhost:5050 \
+            -e K6_WEB_DASHBOARD=true \
+            -e K6_WEB_DASHBOARD_EXPORT=/perf/smoke-report.html \
+            grafana/k6:2.3.0 run /perf/smoke.js
+
+      - name: Save the performance report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-smoke-report
+          path: perf/smoke-report.html
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
