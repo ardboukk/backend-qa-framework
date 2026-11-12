@@ -71,15 +71,20 @@ app.post("/transfer", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const from = await client.query("SELECT id, balance FROM accounts WHERE id = $1", [from_id]);
-    const to = await client.query("SELECT id, balance FROM accounts WHERE id = $1", [to_id]);
-    if (from.rowCount === 0 || to.rowCount === 0) {
+    // Lock both rows until COMMIT/ROLLBACK, always in id order so two transfers can't deadlock
+    const locked = await client.query(
+      "SELECT id, balance FROM accounts WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE",
+      [[from_id, to_id]]
+    );
+    const from = locked.rows.find((r) => r.id === from_id);
+    const to = locked.rows.find((r) => r.id === to_id);
+    if (!from || !to) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "account not found" });
     }
 
-    const fromBalance = Number(from.rows[0].balance);
-    const toBalance = Number(to.rows[0].balance);
+    const fromBalance = Number(from.balance);
+    const toBalance = Number(to.balance);
     if (fromBalance < amount) {
       await client.query("ROLLBACK");
       return res.status(422).json({ error: "insufficient funds" });
