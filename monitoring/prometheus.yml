@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: bank-api
+    static_configs:
+      - targets: ["bank-api:8080"]

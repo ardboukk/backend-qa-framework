@@ -5,6 +5,7 @@ Concurrency checks for /transfer: many identical requests at the same instant.
 """
 import os
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
@@ -47,7 +48,27 @@ def fire_at_once(calls):
 
     def run(call):
         barrier.wait()  # each thread waits here until all are ready, then all go
-        return call().status_code
+        try:
+            return call().status_code
+        except requests.exceptions.Timeout:
+            return "timeout"  # record it, don't crash: we want the full picture
+
+    with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+        return list(pool.map(run, calls))
+
+
+def fire_at_once_timed(calls):
+    """Like fire_at_once, but returns (status, seconds) for every call."""
+    barrier = threading.Barrier(len(calls), timeout=10)
+
+    def run(call):
+        barrier.wait()
+        start = time.monotonic()
+        try:
+            status = call().status_code
+        except requests.exceptions.Timeout:
+            status = "timeout"
+        return status, round(time.monotonic() - start, 2)
 
     with ThreadPoolExecutor(max_workers=len(calls)) as pool:
         return list(pool.map(run, calls))
@@ -119,3 +140,43 @@ def test_opposite_transfers_do_not_deadlock(db):
     assert sum(after.values()) == Decimal("2000.00"), "money changed" + summary
     assert after[a] == after[b] == Decimal("1000.00"), "10 each way should cancel out" + summary
     assert statuses.count(201) == N, "every transfer is affordable; all must succeed" + summary
+
+
+def test_locked_account_fails_fast_and_does_not_stall_others():
+    hot, payer, bystander = new_account(100), new_account(100), new_account(0)
+
+    # Simulate a long-running transaction holding a lock on the hot account
+    lock_conn = psycopg.connect(DB_DSN)  # NOT autocommit: the transaction stays open
+    try:
+        lock_conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (hot,))
+
+        transfers = [
+            lambda: requests.post(
+                f"{API}/transfer",
+                json={"from_id": payer, "to_id": hot, "amount": 1},
+                timeout=10,
+            )
+            for _ in range(12)  # more than the 10 pool connections
+        ]
+        read = [lambda: requests.get(f"{API}/accounts/{bystander}", timeout=10)]
+
+        results = fire_at_once_timed(transfers + read)
+    finally:
+        lock_conn.rollback()
+        lock_conn.close()
+
+    transfer_results, (read_status, read_secs) = results[:-1], results[-1]
+    statuses = [status for status, _ in transfer_results]
+    slowest = max(secs for _, secs in transfer_results)
+    summary = (
+        f"\n  transfers: {transfer_results}"
+        f"\n  read: {read_status} in {read_secs}s"
+    )
+
+    # Design: 2 s timeout per statement, pool of 10, 12 transfers -> at most 2 waves
+    # Bystander may queue behind at most ONE wave; it must never wait for the whole lock
+    assert read_status == 200, "unrelated read failed" + summary
+    assert read_secs < 2.5, "unrelated read was stalled by a lock on another account" + summary
+    # Locked account: everyone gets a fast, clear answer
+    assert set(statuses) == {503}, "locked account should return 503 (busy)" + summary
+    assert slowest < 5, "a transfer waited longer than 2 waves x 2 s" + summary

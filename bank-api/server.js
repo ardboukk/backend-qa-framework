@@ -4,7 +4,54 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json());
 
+// ---------- Metrics (Prometheus) ----------
+const promClient = require("prom-client");
+promClient.collectDefaultMetrics(); // CPU, memory, event-loop lag, GC
+
+const httpDuration = new promClient.Histogram({
+  name: "http_request_duration_seconds",
+  help: "HTTP request duration in seconds",
+  labelNames: ["method", "route", "status"],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+});
+
+const transfersTotal = new promClient.Counter({
+  name: "bank_transfers_total",
+  help: "Transfer attempts by outcome",
+  labelNames: ["outcome"],
+});
+// Create every outcome at 0 so "no errors" reads as 0, not as missing data
+for (const outcome of ["success", "insufficient_funds", "not_found", "busy", "error"]) {
+  transfersTotal.inc({ outcome }, 0);
+}
+
+// Time every request; label by route PATTERN (/accounts/:id), not the real URL
+app.use((req, res, next) => {
+  const end = httpDuration.startTimer();
+  res.on("finish", () => {
+    const route = req.route ? req.route.path : "unmatched";
+    end({ method: req.method, route, status: res.statusCode });
+  });
+  next();
+});
+
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", promClient.register.contentType);
+  res.end(await promClient.register.metrics());
+});
+
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10 });
+
+new promClient.Gauge({
+  name: "db_pool_connections",
+  help: "DB connection pool: total, idle, and requests waiting for a connection",
+  labelNames: ["state"],
+  collect() {
+    this.set({ state: "total" }, pool.totalCount);
+    this.set({ state: "idle" }, pool.idleCount);
+    this.set({ state: "waiting" }, pool.waitingCount);
+  },
+});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Money: non-negative, at most 2 decimals, fits NUMERIC(12,2)
@@ -71,6 +118,9 @@ app.post("/transfer", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL lock_timeout = '2s'"); // limit for each single lock wait
+    await client.query("SET LOCAL statement_timeout = '2s'"); // limit for each whole statement
+    await client.query("SET LOCAL statement_timeout = '2s'"); // limit for each whole statement
     // Lock both rows until COMMIT/ROLLBACK, always in id order so two transfers can't deadlock
     const locked = await client.query(
       "SELECT id, balance FROM accounts WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE",
@@ -80,6 +130,7 @@ app.post("/transfer", async (req, res) => {
     const to = locked.rows.find((r) => r.id === to_id);
     if (!from || !to) {
       await client.query("ROLLBACK");
+      transfersTotal.inc({ outcome: "not_found" });
       return res.status(404).json({ error: "account not found" });
     }
 
@@ -87,6 +138,7 @@ app.post("/transfer", async (req, res) => {
     const toBalance = Number(to.balance);
     if (fromBalance < amount) {
       await client.query("ROLLBACK");
+      transfersTotal.inc({ outcome: "insufficient_funds" });
       return res.status(422).json({ error: "insufficient funds" });
     }
 
@@ -99,9 +151,16 @@ app.post("/transfer", async (req, res) => {
       [from_id, to_id, amount]
     );
     await client.query("COMMIT");
+    transfersTotal.inc({ outcome: "success" });
     res.status(201).json({ transfer_id: t.rows[0].id, from_id, to_id, amount });
   } catch (err) {
     await client.query("ROLLBACK");
+    if (err.code === "55P03" || err.code === "57014") { // lock_timeout or statement_timeout
+      transfersTotal.inc({ outcome: "busy" });
+      res.set("Retry-After", "1");
+      return res.status(503).json({ error: "account busy, try again shortly" });
+    }
+    transfersTotal.inc({ outcome: "error" });
     console.error("transfer failed:", err.message);
     res.status(500).json({ error: "internal error" });
   } finally {
