@@ -1,5 +1,5 @@
 import requests
-from conftest import BASE_URL, HEADERS
+from tests.config import BOOKER_URL as BASE_URL, JSON_HEADERS as HEADERS
 
 
 def test_booking_price_and_deposit(booking, booking_data):

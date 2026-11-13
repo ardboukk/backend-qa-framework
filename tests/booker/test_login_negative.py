@@ -1,6 +1,6 @@
 import pytest
 import requests
-from conftest import BASE_URL, HEADERS
+from tests.config import BOOKER_URL as BASE_URL, JSON_HEADERS as HEADERS
 
 @pytest.mark.xfail(reason="BUG-1: failed login returns 200 instead of 401")
 

@@ -2,8 +2,7 @@ import uuid                     # a library for random IDs
 import pytest                   # Part A/B: pytest's toolbox
 import requests                 # Script 1: sends HTTP requests
 
-BASE_URL = "https://restful-booker.herokuapp.com"    # Script 1: a constant
-HEADERS = {"Accept": "application/json"}             # Script 3: a dictionary
+from tests.config import BOOKER_URL as BASE_URL, JSON_HEADERS as HEADERS
 
 
 @pytest.fixture(scope="session")                     # Part B: shared, because tests only READ the token

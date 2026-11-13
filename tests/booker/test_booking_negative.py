@@ -1,6 +1,6 @@
 import pytest
 import requests
-from conftest import BASE_URL, HEADERS
+from tests.config import BOOKER_URL as BASE_URL, JSON_HEADERS as HEADERS
 
 # Known defects in Restful-Booker, documented in the defect log
 BUG_13 = "BUG-13: missing or wrong-type required fields crash the server (500 instead of 400)"

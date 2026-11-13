@@ -1,6 +1,6 @@
 import pytest
 import requests
-from conftest import BASE_URL, HEADERS
+from tests.config import BOOKER_URL as BASE_URL, JSON_HEADERS as HEADERS
 
 
 def test_create_booking_returns_id(booking_data):

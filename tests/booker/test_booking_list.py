@@ -1,5 +1,5 @@
 import requests
-from conftest import BASE_URL
+from tests.config import BOOKER_URL as BASE_URL
 
 def test_get_all_bookings_returns_list_of_ids():
     # Sends a GET to https://restful-booker.herokuapp.com/booking with a 10 second timeout
