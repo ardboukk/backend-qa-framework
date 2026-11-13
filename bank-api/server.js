@@ -4,6 +4,42 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json());
 
+// ---------- Request IDs + structured logs ----------
+const crypto = require("crypto");
+const SAFE_ID = /^[A-Za-z0-9._-]{1,64}$/; // blocks log injection via the header
+
+// One JSON object per line: easy to search, filter and ship to a log system
+function log(level, msg, fields = {}) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), level, msg, ...fields }));
+}
+
+app.use((req, res, next) => {
+  const incoming = req.get("X-Request-Id");
+  req.id = incoming && SAFE_ID.test(incoming) ? incoming : crypto.randomUUID();
+  res.set("X-Request-Id", req.id);
+
+  // Every error body carries the id, so a customer can quote it to support
+  const json = res.json.bind(res);
+  res.json = (body) =>
+    json(res.statusCode >= 400 && body && typeof body === "object"
+      ? { ...body, request_id: req.id }
+      : body);
+
+  // One access-log line per request
+  const start = process.hrtime.bigint();
+  res.on("finish", () => {
+    if (req.path === "/metrics") return; // scrapes every 5 s would drown the log
+    log(res.statusCode >= 500 ? "error" : "info", "request", {
+      request_id: req.id,
+      method: req.method,
+      route: req.route ? req.route.path : "unmatched",
+      status: res.statusCode,
+      duration_ms: Math.round(Number(process.hrtime.bigint() - start) / 1e5) / 10,
+    });
+  });
+  next();
+});
+
 // ---------- Metrics (Prometheus) ----------
 const promClient = require("prom-client");
 promClient.collectDefaultMetrics(); // CPU, memory, event-loop lag, GC
@@ -83,7 +119,7 @@ app.post("/accounts", async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("create account failed:", err.message);
+    log("error", "create account failed", { request_id: req.id, error: err.message, code: err.code });
     res.status(500).json({ error: "internal error" });
   }
 });
@@ -99,7 +135,7 @@ app.get("/accounts/:id", async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ error: "not found" });
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("read account failed:", err.message);
+    log("error", "read account failed", { request_id: req.id, error: err.message, code: err.code });
     res.status(500).json({ error: "internal error" });
   }
 });
@@ -118,6 +154,7 @@ app.post("/transfer", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT set_config('application_name', $1, true)", [`bank-api ${req.id}`]);
     await client.query("SET LOCAL lock_timeout = '2s'"); // limit for each single lock wait
     await client.query("SET LOCAL statement_timeout = '2s'"); // limit for each whole statement
     await client.query("SET LOCAL statement_timeout = '2s'"); // limit for each whole statement
@@ -152,16 +189,18 @@ app.post("/transfer", async (req, res) => {
     );
     await client.query("COMMIT");
     transfersTotal.inc({ outcome: "success" });
+    log("info", "transfer completed", { request_id: req.id, transfer_id: t.rows[0].id, from_id, to_id, amount });
     res.status(201).json({ transfer_id: t.rows[0].id, from_id, to_id, amount });
   } catch (err) {
     await client.query("ROLLBACK");
     if (err.code === "55P03" || err.code === "57014") { // lock_timeout or statement_timeout
       transfersTotal.inc({ outcome: "busy" });
+      log("warn", "transfer busy", { request_id: req.id, from_id, to_id, error: err.message });
       res.set("Retry-After", "1");
       return res.status(503).json({ error: "account busy, try again shortly" });
     }
     transfersTotal.inc({ outcome: "error" });
-    console.error("transfer failed:", err.message);
+    log("error", "transfer failed", { request_id: req.id, error: err.message, code: err.code });
     res.status(500).json({ error: "internal error" });
   } finally {
     client.release();
