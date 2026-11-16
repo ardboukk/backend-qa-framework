@@ -6,5 +6,7 @@ BANK_API_URL = os.getenv("BANK_API_URL", "http://localhost:8081")
 BANK_DB_DSN = os.getenv("BANK_DB_DSN", "postgresql://qa:qa_local_only@localhost:5433/bank")
 RATELIMIT_URL = os.getenv("RATELIMIT_URL", "http://localhost:3000")
 MOCK_PAYMENT_URL = os.getenv("MOCK_PAYMENT_URL", "http://localhost:4000")
+# Must match RATE_WINDOW_MS for ratelimit-api in docker-compose.yml
+RATE_WINDOW_S = int(os.getenv("RATE_WINDOW_MS", "2000")) / 1000
 
 JSON_HEADERS = {"Accept": "application/json"}

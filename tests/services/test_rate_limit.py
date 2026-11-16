@@ -1,13 +1,15 @@
 import time
 import requests
 
-URL = "http://localhost:3000/hello"     # our own rate-limited server
+from tests.config import RATELIMIT_URL, RATE_WINDOW_S
+
+URL = f"{RATELIMIT_URL}/hello"     # our own rate-limited server
 LIMIT = 5                                # 5 requests allowed...
-WINDOW = 10                              # ...per 10 seconds
+WINDOW = RATE_WINDOW_S                   # ...per window (2 s in the test environment)
 
 
 def start_fresh_window():                # a HELPER function (not a test: no "test_" at the start)
-    time.sleep(WINDOW + 1)               # wait 11 seconds, so any old window has expired
+    time.sleep(WINDOW + 1)               # wait one window + 1 s, so any old window has expired
 
 
 def test_requests_up_to_the_limit_succeed():

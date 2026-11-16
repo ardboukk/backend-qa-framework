@@ -36,12 +36,35 @@ jobs:
           docker compose logs
           exit 1
 
-      - name: Run the tests
-        run: pytest -v
+      - name: Run parallel-safe tests (own code)
+        run: pytest -v -n 4 -m "not serial and not external"
+
+      - name: Run serial tests (shared state, timing)
+        run: pytest -v -m serial
 
       - name: Stop test servers
         if: always()
         run: docker compose down
+
+  external:
+    # Tests against the public restful-booker site: informative, never blocks the build
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run external tests (restful-booker)
+        run: pytest -v -n 4 -m external
 
   postman:
     runs-on: ubuntu-24.04

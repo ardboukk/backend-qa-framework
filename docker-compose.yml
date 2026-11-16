@@ -2,6 +2,8 @@ services:
   ratelimit-api:
     build: ./ratelimit-api
     command: ["node", "server.js"]
+    environment:
+      RATE_WINDOW_MS: "2000"   # test environment: 2 s window (production default is 10 s)
     ports:
       - "3000:3000"
 

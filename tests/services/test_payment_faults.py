@@ -2,7 +2,9 @@ import time
 import pytest
 import requests
 
-MOCK = "http://localhost:4000"
+from tests.config import MOCK_PAYMENT_URL
+
+MOCK = MOCK_PAYMENT_URL
 
 
 def pay(path, timeout=2, retries=2):

@@ -4,7 +4,7 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 
 app.use(rateLimit({
-  windowMs: 10 * 1000,      // a 10-second window
+  windowMs: Number(process.env.RATE_WINDOW_MS || 10000), // 10 s by default; shorter in test environments
   limit: 5,                 // 5 requests allowed per window
   standardHeaders: "draft-7",
   legacyHeaders: false,
