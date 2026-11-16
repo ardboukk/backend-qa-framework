@@ -2,7 +2,11 @@ import pytest
 
 
 def pytest_collection_modifyitems(items):
-    """Every test under tests/booker/ is external: a new file there can't forget the marker."""
+    """Markers from folders, so a new test file can't forget them."""
     for item in items:
-        if "/tests/booker/" in item.path.as_posix():
+        path = item.path.as_posix()
+        if "/tests/booker/" in path:
             item.add_marker(pytest.mark.external)
+        if "/tests/services/" in path:
+            # share server-side state (rate-limit counter, mock fault behaviour)
+            item.add_marker(pytest.mark.serial)
